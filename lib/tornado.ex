@@ -1,14 +1,18 @@
 defmodule Tornado do
   import Month
 
+  ### Public Functions ###
+
   def main(args) do
-    args |> parse_args |> get_tornado_data
+    args
+    |> parse_args
+    |> get_tornado_data
+    |> process
   end
 
   def get_tornado_data([url: url]) do
     case HTTPoison.get(url) do
-      {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
-        process(body)
+      {:ok, %HTTPoison.Response{status_code: 200, body: body}} -> body
       {:ok, %HTTPoison.Response{status_code: 400}} ->
         IO.puts "404 - Not Found!"
       {:error, %HTTPoison.Error{reason: reason}} ->
@@ -21,6 +25,7 @@ defmodule Tornado do
     |> truncate_body
     |> split_rows
     |> parse_rows
+    |> IO.puts
   end
 
   def truncate_body(body) do
@@ -31,6 +36,15 @@ defmodule Tornado do
     )
   end
 
+  @doc """
+  Takes full body text and cuts out everything leading up to first line,
+  identified by the provided pattern. Here, we identify the first line of data
+  via the "JAN" month identifier.
+
+  Ex. http://www.spc.noaa.gov/climo/online/monthly/newm.html
+
+  @param [String] body
+  """
   def get_truncate_offset(body, pattern) do
     _get_truncate_offset(
       body,
@@ -40,6 +54,51 @@ defmodule Tornado do
       ""
     )
   end
+
+  @doc """
+  Takes a truncated body (i.e. assumed to start with month-based rows) & splits
+  at newlines - takes first 12 rows for the 12 months of data
+
+  @param [String] body - the truncated body
+  """
+  def split_rows(body) do
+    body
+    |> Enum.join("")
+    |> String.split("\n")
+    |> Enum.take(12)
+  end
+
+  @doc """
+  Takes array of row strings and parses into Map + Structs dataset
+
+  @param [Array] rows - Collection of row strings
+  """
+  def parse_rows(rows) do
+    _parse_rows(
+      rows,
+      %{
+        2016 => generate_empty_dataset,
+        2015 => generate_empty_dataset,
+        2014 => generate_empty_dataset,
+        2013 => generate_empty_dataset
+      },
+      0
+    )
+  end
+
+  @doc """
+  Takes a single string row, splits into an array of characters, and loops thru
+  the chars to parse stats based on custom triggers
+
+  @param [String] row - Single row string
+  @param [Integer] month - Number corresponding to month of year
+  @param [Map] data - Map of parsed data to be eventually returned
+  """
+  def parse_single_row(row, month, data) do
+    _parse_single_row(String.split(row, ""), data, "", false, 0, month)
+  end
+
+  ### Private Functions ###
 
   defp _get_truncate_offset([], _, _, _, _), do: "No offset found!"
   defp _get_truncate_offset(_body, offset, pattern, _trigger, match) when pattern == match do
@@ -55,26 +114,6 @@ defmodule Tornado do
     end
   end
 
-  def split_rows(body) do
-    body
-    |> Enum.join("")
-    |> String.split("\n")
-    |> Enum.take(12)
-  end
-
-  def parse_rows(rows) do
-    _parse_rows(
-      rows,
-      %{
-        2016 => generate_empty_dataset,
-        2015 => generate_empty_dataset,
-        2014 => generate_empty_dataset,
-        2013 => generate_empty_dataset
-      },
-      0
-    )
-  end
-
   defp _parse_rows(_, data, 12), do: data
   defp _parse_rows(rows, data, count) do
     _parse_rows(
@@ -82,10 +121,6 @@ defmodule Tornado do
       parse_single_row(Enum.at(rows, count), count + 1, data),
       count + 1
     )
-  end
-
-  def parse_single_row(row, month, data) do
-    _parse_single_row(String.split(row, ""), data, "", false, 0, month)
   end
 
   defp _parse_single_row([], data, _, _, _, _), do: data
@@ -105,7 +140,7 @@ defmodule Tornado do
     end
   end
 
-  def add_new_num(data, num, count, month) do
+  defp add_new_num(data, num, count, month) do
     cond do
       count in 0..4 ->
         case count do
@@ -133,6 +168,8 @@ defmodule Tornado do
         end
     end
   end
+
+  ### Helpers + Parsers ###
 
   defp parse_args(args) do
     { options, _, _ } = OptionParser.parse(args, switches: [url: :string])
