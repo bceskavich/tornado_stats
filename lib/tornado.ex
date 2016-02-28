@@ -4,10 +4,16 @@ defmodule Tornado do
   ### Public Functions ###
 
   def main(args) do
-    args
+    { status, result } = args
     |> parse_args
     |> get_tornado_data
     |> process
+    |> JSON.encode
+
+    case status do
+      :ok -> IO.puts result
+      _ -> IO.puts "Please try again :/"
+    end
   end
 
   def get_tornado_data([url: url]) do
@@ -25,7 +31,6 @@ defmodule Tornado do
     |> truncate_body
     |> split_rows
     |> parse_rows
-    |> IO.puts
   end
 
   def truncate_body(body) do

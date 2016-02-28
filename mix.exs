@@ -30,7 +30,7 @@ defmodule Tornado.Mixfile do
   defp deps do
     [
       {:httpoison, "~> 0.8.0"},
-      {:poison, "~> 2.0"}
+      {:json, "~> 0.3.0"}
     ]
   end
 end
